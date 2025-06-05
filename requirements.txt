@@ -1,6 +1,6 @@
-streamlit
+streamlit>=1.22,<2.0
 pandas
 numpy
 openpyxl
 xlrd==1.2.0
-st-aggrid
+st-aggrid==0.3.3
