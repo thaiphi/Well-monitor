@@ -3,4 +3,4 @@ pandas
 numpy
 openpyxl
 xlrd==1.2.0
-st-aggrid==0.3.3
+streamlit-aggrid
