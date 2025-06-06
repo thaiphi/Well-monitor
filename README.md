@@ -10,5 +10,5 @@ This is a Streamlit app to visualize daily ESP well performance.
 - Dashboard and raw data views
 
 ## Usage
-- Go to [https://your-username.streamlit.app](https://your-username.streamlit.app)
+- Go to https://well-monitor-apphwqv7jrvpknpdfu2bffj.streamlit.app/
 - Upload your data in the sidebar
