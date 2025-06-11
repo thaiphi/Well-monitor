@@ -176,7 +176,7 @@ if night_mode:
         .ag-theme-alpine-dark ::-webkit-scrollbar-thumb {
             background-color: #888 !important;
         }
-        /7 ─── Streamlit File Uploader ───────────────────────────── */
+        // ─── Streamlit File Uploader ───────────────────────────── */
         [data-testid="stFileUploader"] {
             background-color: transparent !important;
             color: #ffffff !important;
@@ -405,11 +405,22 @@ else:
             dfs.append(load_excel(f))
 
 df_raw = pd.concat(dfs, ignore_index=True)
-df_raw = df_raw[
-    ~df_raw["Well Name"].isna() &
-    (df_raw["Well Name"].astype(str).str.strip() != "")
-]
-df_raw["Date"] = pd.to_datetime(df_raw["Date"]).dt.date
+
+# 1) Drop columns whose name is empty or all whitespace:
+blank_cols = [c for c in df_raw.columns if not str(c).strip()]
+df_raw = df_raw.drop(columns=blank_cols, errors="ignore")
+
+# 2) If any column names were duplicated, keep only the first occurrence:
+df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
+
+# 3) Now filter out empty Well Names and coerce Date → date
+df_raw = (
+    df_raw
+      .dropna(subset=["Well Name"])
+      .loc[lambda d: d["Well Name"].astype(str).str.strip().ne("")]
+      .assign(Date=lambda d: pd.to_datetime(d["Date"]).dt.date)
+)
+
 
 # 🔍 DEBUG: Show first 5 uptime rows if requested
 if st.sidebar.checkbox("DEBUG: show first 5 uptime rows"):
@@ -599,15 +610,29 @@ non_txt = {
     "Pump Type", "Drive Type", "State Detail/Op Mode", "Links",
     "Latest Fault", "Fault Date", "Link URL"
 }
-for c in df_recent.columns.difference(non_txt | {"Date"}):
-    df_recent[c] = pd.to_numeric(df_recent[c], errors="coerce")
 
+for c in df_recent.columns:
+    if c not in non_txt and c != "Date":
+        col_data = df_recent[c]
+        if not (isinstance(col_data, pd.Series) and col_data.ndim == 1):
+            print(f"Column {c} is not a Series or is not 1D, got type {type(col_data)} and ndim {getattr(col_data,'ndim',None)}")
+        else:
+            df_recent[c] = pd.to_numeric(col_data, errors="coerce")
 
 numeric_cols = df_recent.select_dtypes(include="number").columns.tolist()
 text_cols    = [c for c in df_recent.columns if c not in numeric_cols + ["Date"]]
 
-agg_dict = {c: ["mean", "max", "min", "std"] for c in numeric_cols if c != "Well Name"}
-agg_dict.update({c: "first" for c in text_cols if c != "Well Name"})
+agg_dict = {
+    c: ["mean","max","min","std"]
+    for c in numeric_cols
+    if c!="Well Name"
+}
+# wrap the "first" in a list so pandas will do SeriesGroupBy.first, not DataFrameGroupBy.first
+agg_dict.update({
+    c: ["first"]
+    for c in text_cols
+    if c!="Well Name"
+})
 df3 = df_recent.groupby("Well Name").agg(agg_dict)
 df3.columns = ["_".join(c) if isinstance(c, tuple) else c for c in df3.columns]
 df3 = df3.reset_index()
@@ -1401,5 +1426,6 @@ if st.button("Refresh & Save Enriched CSV"):
 
 
 # To run from PowerShell or Command Prompt:
+# cd "C:\\Users\\Thai.phi\\OneDrive - Endurance Lift Solutions\\Desktop\\modbus dashboard"
 # cd "C:\\Users\\Thai.phi\\OneDrive - Endurance Lift Solutions\\Desktop\\modbus dashboard"
 # streamlit run "well review.py"
