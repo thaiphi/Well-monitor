@@ -5,3 +5,4 @@ openpyxl
 xlrd==1.2.0
 streamlit-aggrid
 pymodbus>=2.5.3
+pdfplumber>=0.7.6
