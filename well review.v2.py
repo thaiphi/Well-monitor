@@ -40,7 +40,7 @@ else:
 THRESH_KEYS = [
     "CapLoadPct","RiskPct","HighIntake","SmallDrawdown",
     "NearUnderLower","LowUptime","HighDT","VibHigh",
-    "SpreadRatio","TempHigh","LowDelta","HighFaultCount"
+    "SpreadRatio","TempHigh","LowDelta","HighFaultCount","HighRunningDays" 
 ]
 WEIGHT_KEYS = [
     "uptime","missing","spread","motortemp","drawdown",
@@ -618,9 +618,118 @@ thr = dict(
             "Used in TerribleScore and PoorPerformance."
         )
     ),
+    HighRunningDays = st.sidebar.number_input(
+        "High running days",0, 365 * 5,
+        defs.get("HighRunningDays", 90),  # default
+        help=("If (Running Days) > this, flag as ‘high running days’")
+    ),
+    
 )
+# ─── Default lists for PoorPerformance & SpeedUp ───────────────────
+poor_defaults = [
+    "LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh"
+]
+speed_true_defaults = [
+    "Avg Intake Pressure > HighIntake",
+    "Drawdown < SmallDrawdown",
+    "High running days",
+    "At_Max_Capacity",
+    "Overload_Risk"
+]
 
+# ───────────── PoorPerformance & SpeedUp Settings ─────────────
+with st.sidebar.expander("PoorPerformance Settings", expanded=True):
+    PoorTrue = st.multiselect(
+        "Must be TRUE",
+        [
+            "LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh",
+            "High running days","At_Max_Capacity","Overload_Risk",
+            "High Motor Temp","High Downtime","Max Vibration",
+            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Uptime %","NearUnderload Ratio","NearUnderload",
+            "Normal_vs_Overload","MissingSensor"
+        ],
+        default=defs.get("PoorTrue", ["LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh"]),
+        key="PoorTrue",
+        help="Any of these TRUE → contributes to PoorPerformance"
+    )
+    PoorFalse = st.multiselect(
+        "Must be FALSE",
+        [
+            "LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh",
+            "High running days","At_Max_Capacity","Overload_Risk",
+            "High Motor Temp","High Downtime","Max Vibration",
+            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Uptime %","NearUnderload Ratio","NearUnderload",
+            "Normal_vs_Overload","MissingSensor"
+        ],
+        default=defs.get("PoorFalse", []),
+        key="PoorFalse",
+        help="All of these must be FALSE → to qualify as PoorPerformance"
+    )
+    thr["PoorTrue"]  = PoorTrue
+    thr["PoorFalse"] = PoorFalse
 
+with st.sidebar.expander("SpeedUp Settings", expanded=True):
+    SpeedTrue = st.multiselect(
+        "Must be TRUE",
+        [
+            "Avg Intake Pressure > HighIntake","Drawdown < SmallDrawdown",
+            "High running days","At_Max_Capacity","Overload_Risk",
+            "High Motor Temp","High Downtime","Max Vibration",
+            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "HighVib","Uptime %","NearUnderload Ratio","NearUnderload",
+            "Normal_vs_Overload","MissingSensor"
+        ],
+        default=defs.get("SpeedTrue", ["Avg Intake Pressure > HighIntake","Drawdown < SmallDrawdown","High running days","At_Max_Capacity","Overload_Risk"]),
+        key="SpeedTrue",
+        help="Select flags that must evaluate to True"
+    )
+    SpeedFalse = st.multiselect(
+        "Must be FALSE",
+        [
+            "Avg Intake Pressure > HighIntake","Drawdown < SmallDrawdown",
+            "High running days","At_Max_Capacity","Overload_Risk",
+            "High Motor Temp","High Downtime","Max Vibration",
+            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "HighVib","Uptime %","NearUnderload Ratio","NearUnderload",
+            "Normal_vs_Overload","MissingSensor"
+        ],
+        default=defs.get("SpeedFalse", []),
+        key="SpeedFalse",
+        help="Select flags that must evaluate to False"
+    )
+    thr["SpeedTrue"]  = SpeedTrue
+    thr["SpeedFalse"] = SpeedFalse
+
+# ───────────── Inject CSS for coloured pills ─────────────
+st.sidebar.markdown(
+    """
+    <style>
+      /* PoorTrue pills */
+      div.st-key-PoorTrue span[data-baseweb="tag"] {
+        background-color: #002062 !important;
+        color:           #ffffff !important;
+      }
+      /* PoorFalse pills */
+      div.st-key-PoorFalse span[data-baseweb="tag"] {
+        background-color: #f4bb2a !important;
+        color:           #000000 !important;
+      }
+      /* SpeedTrue pills */
+      div.st-key-SpeedTrue span[data-baseweb="tag"] {
+        background-color: #002062 !important;
+        color:           #ffffff !important;
+      }
+      /* SpeedFalse pills */
+      div.st-key-SpeedFalse span[data-baseweb="tag"] {
+        background-color: #f4bb2a !important;
+        color:           #000000 !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ───── Reset per-customer settings ─────
 if page == "Dashboard" and st.session_state.selected_customer:
@@ -786,8 +895,22 @@ latest = (
           .tail(1)
           .set_index("Well Name")
 )
-df3["Latest_Normal"]   = latest["Normal Running Amps"].reindex(df3["Well Name"]).values
-df3["Latest_Overload"] = latest["Motor Overload"].reindex(df3["Well Name"]).values
+
+# coerce to floats, turning any non-numeric into NaN
+df3["Latest_Normal"] = pd.to_numeric(
+    latest["Normal Running Amps"]
+        .reindex(df3["Well Name"])
+        .values,
+    errors="coerce"
+)
+df3["Latest_Overload"] = pd.to_numeric(
+    latest["Motor Overload"]
+        .reindex(df3["Well Name"])
+        .values,
+    errors="coerce"
+)
+
+# now this comparison will work
 df3["Normal_vs_Overload"] = df3["Latest_Normal"] >= df3["Latest_Overload"]
 
 # ───────────── Cap-load & risk (flipped) ─────────────
@@ -799,7 +922,11 @@ df3["Overload_Risk"]   = df3["CapRisk"] >= thr["RiskPct"]
 
 # ───────────── Additional flags and derived columns ─────────────
 drawdown = df3[col("Max Intake Pressure", "max")] - df3[col("Min Intake Pressure", "min")]
-
+df3["HighRunningDays"] = df3[col("Running Days", "mean")] > thr["HighRunningDays"]
+df3["HighDowntime"]    = df3[col("Downtime (Hr)", "mean")] > thr["HighDT"]
+df3["LowDeltaFlag"]    = (
+    df3[col("Avg Tubing", "mean")] - df3[col("Avg Casing", "mean")]
+) <= thr["LowDelta"]
 df3["NearUnderload Ratio"] = df3[col("Avg Drive Amps", "mean")] / df3[col("Motor Underload", "mean")]
 df3["NearUnderload"] = df3["NearUnderload Ratio"] < thr["NearUnderLower"]
 
@@ -843,26 +970,82 @@ fault_mean = (
 )
 df3["Fault Count"] = (fault_mean * hist_days).round().astype(int)
 df3["FaultHigh"]   = df3["Fault Count"] >= thr["HighFaultCount"]
-
-# ───────────── SpeedUp (restored) ─────────────
-df3["SpeedUp"] = (
-    (df3[col("Running Days", "mean")] < 90) &
-    (df3[col("Avg Intake Pressure", "mean")] > thr["HighIntake"]) &
-    (drawdown < thr["SmallDrawdown"]) &
-    (~df3["Overload_Risk"]) &
-    (~df3["At_Max_Capacity"])
+df3["ModemOffline"] = (
+    df3[col("State Detail/Op Mode", "first")] == "MODEM OFFLINE"
 )
+# ─── build a map from your sidebar strings → boolean series ─────────
+flag_map = {
+    "LowUptime":          df3["LowUptime"],
+    "HighVib":            df3["HighVib"],
+    "SpreadFlag":         df3["SpreadFlag"],
+    "HighMotorTemp":      df3["HighMotorTemp"],
+    "FaultHigh":          df3["FaultHigh"],
 
-# ───────────── PoorPerformance (updated) ─────────────
-df3["PoorPerformance"] = df3[
-    [
-        "LowUptime",
-        "HighVib",
-        "SpreadFlag",
-        "HighMotorTemp",
-        "FaultHigh",
-    ]
-].any(axis=1)
+    "High running days":  df3["HighRunningDays"],
+    "High Downtime":      df3["HighDowntime"],
+    "LowDeltaFlag":       df3["LowDeltaFlag"],
+
+    "At_Max_Capacity":    df3["At_Max_Capacity"],
+    "Overload_Risk":      df3["Overload_Risk"],
+    "High Motor Temp":    df3["HighMotorTemp"],
+    "Max Vibration":      df3["HighVib"],
+    "Spread Ratio":       df3["SpreadFlag"],
+    "Tubing-Casing Δ":    df3["LowDeltaFlag"],
+    "Fault Count":        df3["FaultHigh"],
+    "Uptime %":           df3["LowUptime"],
+    "NearUnderload Ratio":df3["NearUnderload"],
+    "NearUnderload":      df3["NearUnderload"],
+    "Normal_vs_Overload": df3["Normal_vs_Overload"],
+    "MissingSensor":      df3["MissingSensor"],
+
+    "Avg Intake Pressure > HighIntake":
+        df3[col("Avg Intake Pressure","mean")] > thr["HighIntake"],
+    "Drawdown < SmallDrawdown":
+        drawdown < thr["SmallDrawdown"],
+}
+
+# ─── PoorPerformance now = OR over your selected criteria ────────────
+# ─── compute PoorPerformance via TRUE & FALSE lists ───────────────────
+# build the TRUE‐flags series
+pt = thr["PoorTrue"]
+if pt:
+    true_df = pd.concat([flag_map[c] for c in pt if c in flag_map], axis=1)
+    poor_true = true_df.any(axis=1)
+else:
+    poor_true = pd.Series(False, index=df3.index)
+
+# build the FALSE‐flags series
+pf = thr["PoorFalse"]
+if pf:
+    false_df = pd.concat([flag_map[c] for c in pf if c in flag_map], axis=1)
+    poor_false_ok = (~false_df).all(axis=1)
+else:
+    poor_false_ok = pd.Series(True, index=df3.index)
+
+# final PoorPerformance: any TRUE *and* all FALSE
+df3["PoorPerformance"] = poor_true & poor_false_ok
+
+
+
+# ─── SpeedUp = AND across all TRUE flags and all FALSE flags ─────────
+true_list  = thr["SpeedTrue"]
+false_list = thr["SpeedFalse"]
+series = []
+
+for c in true_list:
+    if c in flag_map:
+        series.append(flag_map[c])
+for c in false_list:
+    if c in flag_map:
+        series.append(~flag_map[c])
+
+# if no criteria selected, default to False
+if series:
+    df3["SpeedUp"] = pd.concat(series, axis=1).all(axis=1)
+else:
+    df3["SpeedUp"] = False
+
+
 
 # ───────────── Terrible‐Performance Score ─────────────
 df3["TerribleScore"] = (
@@ -884,7 +1067,9 @@ df_show["HighVib_bool"]      = df3["HighVib"]         # True = failed vibration 
 df_show["SpreadFlag_bool"]   = df3["SpreadFlag"]      # True = failed spread‐ratio threshold
 df_show["HighMotorTemp_bool"]= df3["HighMotorTemp"]   # True = failed motor‐temp threshold
 df_show["FaultHigh_bool"]    = df3["FaultHigh"]       # True = failed fault‐count threshold
-
+df_show["HighRunningDays_bool"] = df3["HighRunningDays"]
+df_show["HighDowntime_bool"]    = df3["HighDowntime"]
+df_show["LowDeltaFlag_bool"]    = df3["LowDeltaFlag"]
 # ─── Add hidden Boolean columns for SpeedUp reasons ───
 #  1) Running Days < 90?
 df_show["Speed_RunDays_OK"]     = df3[col("Running Days", "mean")] < 90
@@ -1141,78 +1326,90 @@ gb.configure_column(
         "(FaultHigh × fault count weight)."
     )
 )
+
+poor_true = defs.get("PoorTrue", poor_defaults)
+poor_false = defs.get("PoorFalse", [])
+
 gb.configure_column(
     "PoorPerformance",
     pinned="left",
     type=["textColumn"],
     headerTooltip=(
-        "True if any of {LowUptime, HighVib, SpreadFlag, HighMotorTemp, FaultHigh} is True.\n"
-        "Displays a red “✗” if True, blank if False."
+        "Displays ✗ if any TRUE‐flag is met or any FALSE‐flag is violated."
     ),
-    tooltipValueGetter=JsCode("""
-        function(params) {
-            // Only show tooltip if the cell value is “✗”
-            if (params.value !== '✗') {
-                return null;
-            }
-            var d = params.data;
-            var lines = [];
-            // Define each sub‐criterion and check its hidden Boolean
-            var crits = [
-                { name: "LowUptime",     ok: !d.LowUptime_bool    },
-                { name: "HighVib",       ok: !d.HighVib_bool       },
-                { name: "SpreadFlag",    ok: !d.SpreadFlag_bool    },
-                { name: "HighMotorTemp", ok: !d.HighMotorTemp_bool },
-                { name: "FaultHigh",     ok: !d.FaultHigh_bool     }
-            ];
-            crits.forEach(function(c) {
-                // If ok===false, that means it “failed”
-                var status = c.ok ? "passed" : "failed";
-                lines.push(c.name + ": " + status);
-            });
+    tooltipValueGetter=JsCode(f"""
+        function(params) {{
+            if (params.value === '✓') return null;
+            const trueList  = {json.dumps(poor_true)};
+            const falseList = {json.dumps(poor_false)};
+            const d = params.data;
+            let lines = [];
+            // TRUE‐flags first
+            trueList.forEach(flag => {{
+                const ok = d[flag + '_bool'];
+                lines.push(`${{flag}} is ${{ok}}: ${{ok ? 'passed' : 'failed'}}`);
+            }});
+            // then FALSE‐flags
+            falseList.forEach(flag => {{
+                const ok = d[flag + '_bool'];
+                lines.push(`${{flag}} is ${{ok}}: ${{ok ? 'passed' : 'failed'}}`);
+            }});
             return lines.join("\\n");
-        }
+        }}
     """)
 )
+
+# pull your saved lists out of defs
+speed_true  = defs.get("SpeedTrue", speed_true_defaults)
+speed_false = defs.get("SpeedFalse", [])
+
+# pre-dump to JSON
+true_list_json  = json.dumps(speed_true)
+false_list_json = json.dumps(speed_false)
 
 gb.configure_column(
     "SpeedUp",
     pinned="left",
     type=["textColumn"],
-    headerTooltip=(
-        "SpeedUp = True if all of:\n"
-        "  • Running Days < 90\n"
-        "  • AND Avg Intake Pressure > High intake threshold\n"
-        "  • AND (Max Intake – Min Intake) < Small drawdown threshold\n"
-        "  • AND Overload_Risk = False\n"
-        "  • AND CapLoad > CapLoadPct threshold.\n"
-        "Displays a green “✓” if True, blank if False."
-    ),
-    tooltipValueGetter=JsCode("""
+    headerTooltip="Displays ✓ only if all TRUE-flags are met and FALSE-flags are clear.",
+    tooltipValueGetter=JsCode(
+        """
         function(params) {
-            // Only show tooltip if the cell value is '✗'
-            if (params.value !== '✗') {
-                return null;
+            if (params.value === '✓') return null;
+            const trueList  = %(true)s;
+            const falseList = %(false)s;
+            const d = params.data;
+
+            // map your sidebar labels → the actual boolean-column names in `d`
+            const map = {
+              "Avg Intake Pressure > HighIntake": "Speed_AvgIntake_OK",
+              "Drawdown < SmallDrawdown":         "Speed_Drawdown_OK",
+              "High running days":                "HighRunningDays_bool",
+              "At_Max_Capacity":                  "Speed_AtMaxOK",
+              "Overload_Risk":                    "Speed_OverloadOK"
+              // add more mappings here if you expose them…
+            };
+
+            function describe(flag) {
+              const field = map[flag] || (flag + "_bool");
+              const val   = d[field];
+              const ok    = (typeof val === "boolean") ? val : undefined;
+              const status = ok === undefined ? "undefined" : ok;
+              const result = ok ? "passed" : "failed";
+              return `${flag} is ${status}: ${result}`;
             }
-            var d = params.data;
-            var lines = [];
-            // Check each SpeedUp sub‐criterion via hidden Boolean fields:
-            var speedC = [
-                { name: "Running Days < 90",            ok: d.Speed_RunDays_OK     },
-                { name: "Avg Intake > HighIntake",      ok: d.Speed_AvgIntake_OK   },
-                { name: "Drawdown < SmallDrawdown",     ok: d.Speed_Drawdown_OK    },
-                { name: "Overload_Risk is False",       ok: d.Speed_OverloadOK     },
-                { name: "At_Max_Capacity is False",     ok: d.Speed_AtMaxOK        }
-            ];
-            speedC.forEach(function(c) {
-                var status = c.ok ? "passed" : "failed";
-                lines.push(c.name + ": " + status);
-            });
+
+            let lines = [];
+            trueList.forEach(f => lines.push(describe(f)));
+            falseList.forEach(f => lines.push(describe(f)));
             return lines.join("\\n");
         }
-    """)
+        """ % {
+            "true":  true_list_json,
+            "false": false_list_json
+        }
+    )
 )
-
 # Configure each derived column’s tooltip & formatting:
 gb.configure_column(
     "At_Max_Capacity",
@@ -1361,7 +1558,9 @@ gb.configure_column("Speed_AvgIntake_OK",   hide=True)
 gb.configure_column("Speed_Drawdown_OK",    hide=True)
 gb.configure_column("Speed_OverloadOK",     hide=True)
 gb.configure_column("Speed_AtMaxOK",        hide=True)
-
+gb.configure_column("HighRunningDays_bool", hide=True)
+gb.configure_column("HighDowntime_bool",    hide=True)
+gb.configure_column("LowDeltaFlag_bool",    hide=True)
 
 gb.configure_grid_options(enableBrowserTooltips=True)
 gb.configure_default_column(resizable=True, minWidth=120)
@@ -1408,6 +1607,7 @@ if page == "Customers":
                SpeedUp_count         = ("SpeedUp",         "sum"),
                HighMotorTemp_count   = ("HighMotorTemp",   "sum"),
                MissingSensor_count   = ("MissingSensor",   "sum"),
+               ModemOffline_count    = ("ModemOffline",    "sum"),
            )
            .reset_index()
     )
@@ -1421,8 +1621,9 @@ if page == "Customers":
     total_speedup = int(cust_metrics["SpeedUp_count"].sum())
     total_temp    = int(cust_metrics["HighMotorTemp_count"].sum())
     total_missing = int(cust_metrics["MissingSensor_count"].sum())
+    total_modem = int((df3["ModemOffline"]).sum())
 
-    cols = st.columns([2, 1, 1, 1, 1, 1])
+    cols = st.columns([2, 1, 1, 1, 1, 1, 1])
 # ─── Customer-Summary card (click → show all customers in Dashboard) ──────────
     with cols[0]:
         # two‐line Markdown label
@@ -1530,13 +1731,15 @@ if page == "Customers":
                      "#FFF1E0", "#CC8400", "#CC6600", "#FFFFFF")
     render_flag_card(cols[5], "Missing Sensor", total_missing,
                      "#F0E0FD", "#6A0080", "#8000CC", "#FFFFFF")
+    render_flag_card(cols[6],"Modem Offline",total_modem,
+                     "#E0E0E0","#444444","#000000", "#FFFFFF")
 
     st.markdown("---")
 
     # ───────────── Per‐Customer Row Cards ─────────────
     for i, row in cust_metrics.iterrows():
         cust_name = row["Customer"]
-        c0, c1, c2, c3, c4, c5 = st.columns([2,1,1,1,1,1])
+        c0, c1, c2, c3, c4, c5, c6 = st.columns([2,1,1,1,1,1,1])
         with c0:
             cust_label = f"**{cust_name}**"
             clicked = st.button(
@@ -1624,6 +1827,9 @@ if page == "Customers":
                          "#FFF1E0", "#CC8400", "#CC6600", "#FFFFFF")
         render_flag_card(c5, "Missing Sensor", int(row["MissingSensor_count"]),
                          "#F0E0FD", "#6A0080", "#8000CC", "#FFFFFF")
+        render_flag_card(c6,"Modem Offline",int(row["ModemOffline_count"]),
+                     "#E0E0E0","#444444","#000000", "#FFFFFF")
+        
 
     st.stop()
 
@@ -1651,9 +1857,10 @@ if page == "Dashboard":
     speedup_count   = int(df3["SpeedUp"].sum())
     hightemp_count  = int(df3["HighMotorTemp"].sum())
     missing_count   = int(df3["MissingSensor"].sum())
+    modem_offline_count = int(df3["ModemOffline"].sum())
 
     # 2) Create a row of 5 columns: one big for title/text, and four small for cards
-    col_title, col_poor, col_speedup, col_ht, col_miss = st.columns([4, 1, 1, 1, 1])
+    col_title, col_poor, col_speedup, col_ht, col_miss, col_modem = st.columns([4,1,1,1,1,1])
 
     # 2a) Title + “Loaded X wells” goes in the first column
     with col_title:
@@ -1802,6 +2009,35 @@ if page == "Dashboard":
             """,
             unsafe_allow_html=True,
         )
+    # ─── Modem Offline ─────────────────────────────────────────
+    light_bg, dark_bg = "#E0E0E0", "#444444"
+    light_txt, dark_txt = "#000000", "#FFFFFF"
+    with col_modem:
+        card_style = (
+            f"background-color: {dark_bg}; color: {dark_txt};"
+            if night_mode else
+            f"background-color: {light_bg}; color: {light_txt};"
+        )
+        st.markdown(
+            f"""
+            <div style="
+                {card_style}
+                padding: 12px;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
+            ">
+                <div style="font-size:14px; font-weight:600; margin-bottom:4px;">
+                    Missing Sensor
+                </div>
+                <div style="font-size:24px; font-weight:bold;">
+                    {modem_offline_count}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
 
     # 3) Below the card row, show the filter & AG-Grid as before:
     st.markdown("")  # optional spacer
