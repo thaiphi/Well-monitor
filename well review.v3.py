@@ -41,7 +41,7 @@ else:
 THRESH_KEYS = [
     "CapLoadPct","RiskPct","HighIntake","SmallDrawdown",
     "NearUnderLower","LowUptime","HighDT","VibHigh",
-    "SpreadRatio","TempHigh","LowDelta","HighFaultCount","HighRunningDays" 
+    "ampSpreadRatio","TempHigh","LowDelta","HighFaultCount","HighRunningDays" 
 ]
 WEIGHT_KEYS = [
     "uptime","missing","spread","motortemp","drawdown",
@@ -611,13 +611,20 @@ thr = dict(
             "Used in TerribleScore and PoorPerformance."
         )
     ),
-    SpreadRatio = st.sidebar.number_input(
-        "Spread ratio ≥ (unitless)", 0.0, 10.0,
-        defs.get("SpreadRatio", 1.0), 0.01,
+    FreqSpread = st.sidebar.number_input(
+        "High Frequency Spread Ratio threshold (unitless)",
+        0.0, 10.0,
+        defs.get("FreqSpread", 1.0),
+        0.01,
+        help="Flag when (Max−Min) ÷ Avg Drive Frequency ≥ this value."
+    ),
+    ampSpreadRatio = st.sidebar.number_input(
+        "High Amp Spread Ratio ≥ (unitless)", 0.0, 10.0,
+        defs.get("ampSpreadRatio", 1.0), 0.01,
         help=(
-            "SpreadRatio = (Max Drive Amps – Min Drive Amps) ÷ (Avg Drive Amps).\n"
+            "ampSpreadRatio = (Max Drive Amps – Min Drive Amps) ÷ (Avg Drive Amps).\n"
             "If Min Drive Amps = 0, we display ‘N/A’ and never flag SpreadFlag.\n"
-            "We set SpreadFlag when SpreadRatio ≥ [this value]."
+            "We set SpreadFlag when ampSpreadRatio ≥ [this value]."
         )
     ),
     TempHigh = st.sidebar.number_input(
@@ -629,7 +636,7 @@ thr = dict(
         )
     ),
     LowDelta = st.sidebar.number_input(
-        "Low Tub-Casing Δ ψ", 0, 5000,
+        "Low Tub-Casing Δ ψ", -5000, 5000,
         defs.get("LowDelta", 30),
         help=(
             "Δ = (Avg Tubing Pressure) – (Avg Casing Pressure).\n"
@@ -649,6 +656,14 @@ thr = dict(
         defs.get("HighRunningDays", 90),  # default
         help=("If (Running Days) > this, flag as ‘high running days’")
     ),
+    PressureDiff = st.sidebar.number_input(
+        "Low Pressure difference threshold (psi)",
+        -10000.0, 10000.0,
+        defs.get("PressureDiff", 0.0),
+        step=0.1,
+        help="Flag when (Avg Disch Pressure − Avg Intake Pressure) ≤ this threshold."
+    ),
+    
     
 )
 # ─── Default lists for PoorPerformance & SpeedUp ───────────────────
@@ -671,7 +686,7 @@ with st.sidebar.expander("PoorPerformance Settings", expanded=True):
             "LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh",
             "High running days","At_Max_Capacity","Overload_Risk",
             "High Motor Temp","High Downtime","Max Vibration",
-            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Amp Spread Ratio","Tubing-Casing Δ","Fault Count","High Frequency Spread Ratio","Low Pressure Difference",
             "Uptime %","NearUnderload Ratio","NearUnderload",
             "Normal_vs_Overload","MissingSensor"
         ],
@@ -685,7 +700,7 @@ with st.sidebar.expander("PoorPerformance Settings", expanded=True):
             "LowUptime","HighVib","SpreadFlag","HighMotorTemp","FaultHigh",
             "High running days","At_Max_Capacity","Overload_Risk",
             "High Motor Temp","High Downtime","Max Vibration",
-            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Amp Spread Ratio","Tubing-Casing Δ","Fault Count","High Frequency Spread Ratio","Low Pressure Difference",
             "Uptime %","NearUnderload Ratio","NearUnderload",
             "Normal_vs_Overload","MissingSensor"
         ],
@@ -703,7 +718,7 @@ with st.sidebar.expander("SpeedUp Settings", expanded=True):
             "Avg Intake Pressure > HighIntake","Drawdown < SmallDrawdown",
             "High running days","At_Max_Capacity","Overload_Risk",
             "High Motor Temp","High Downtime","Max Vibration",
-            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Amp Spread Ratio","Tubing-Casing Δ","Fault Count","High Frequency Spread Ratio","Low Pressure Difference",
             "HighVib","Uptime %","NearUnderload Ratio","NearUnderload",
             "Normal_vs_Overload","MissingSensor"
         ],
@@ -717,7 +732,7 @@ with st.sidebar.expander("SpeedUp Settings", expanded=True):
             "Avg Intake Pressure > HighIntake","Drawdown < SmallDrawdown",
             "High running days","At_Max_Capacity","Overload_Risk",
             "High Motor Temp","High Downtime","Max Vibration",
-            "Spread Ratio","Tubing-Casing Δ","Fault Count",
+            "Amp Spread Ratio","Tubing-Casing Δ","Fault Count","High Frequency Spread Ratio","Low Pressure Difference",
             "HighVib","Uptime %","NearUnderload Ratio","NearUnderload",
             "Normal_vs_Overload","MissingSensor"
         ],
@@ -788,11 +803,11 @@ weights = dict(
         )
     ),
     spread        = st.sidebar.slider(
-        "Spread ratio weight", 0.0, 5.0,
+        "Amp Spread Ratio weight", 0.0, 5.0,
         defs.get("spread", 1.0), 0.1,
         help=(
-            "Adds (SpreadRatio × [this value]) to TerribleScore.\n"
-            "SpreadRatio = (Max Drive Amps − Min Drive Amps) ÷ (Avg Drive Amps)."
+            "Adds (ampSpreadRatio × [this value]) to TerribleScore.\n"
+            "ampSpreadRatio = (Max Drive Amps − Min Drive Amps) ÷ (Avg Drive Amps)."
         )
     ),
     motortemp     = st.sidebar.slider(
@@ -962,7 +977,30 @@ df3["Max Vibration"] = df3[[col("Avg Vib X", "mean"), col("Avg Vib Y", "mean")]]
 df3["HighVib"] = df3["Max Vibration"] >= thr["VibHigh"]
 
 df3["HighMotorTemp"] = df3[col("Max Motor Temp", "max")] >= thr["TempHigh"]
+df3["Pressure Difference"] = (
+    df3[col("Avg Disch Pressure", "mean")]
+    - df3[col("Avg Intake Pressure", "mean")]
+)
 
+freq_range = (
+    df3[col("Max Drive Frequency", "max")]
+    - df3[col("Min Drive Frequency", "min")]
+)
+df3["Frequency Spread Ratio"] = np.where(
+    df3[col("Avg Drive Frequency", "mean")] > 0,
+    freq_range / df3[col("Avg Drive Frequency", "mean")],
+    np.nan
+)
+# ───────────── Compute Amp Spread Ratio & Flag ─────────────
+spread_ratio = (
+    (df3[col("Max Drive Amps", "max")] - df3[col("Min Drive Amps", "min")])
+    / df3[col("Avg Drive Amps", "mean")]
+)
+df3["ampSpreadRatio"] = spread_ratio.where(df3[col("Min Drive Amps", "min")] != 0, np.nan)
+df3["SpreadFlag"] = (
+    (df3["ampSpreadRatio"] >= thr["ampSpreadRatio"]) &
+    (df3[col("Min Drive Amps", "min")] != 0)
+)
 df3["Lost_Motor"] = (
     (df3[col("Avg Motor Amps", "mean")] == 0) |
     (use_flat & (df3[col("Avg Motor Amps", "std")] == 0))
@@ -978,16 +1016,7 @@ uptime_pct       = df3[col("Uptime (%)", "mean")] * 100
 df3["LowUptime"] = uptime_pct < thr["LowUptime"]
 
 
-# ───────────── Compute Spread Ratio & Flag ─────────────
-spread_ratio = (
-    (df3[col("Max Drive Amps", "max")] - df3[col("Min Drive Amps", "min")])
-    / df3[col("Avg Drive Amps", "mean")]
-)
-df3["SpreadRatio"] = spread_ratio.where(df3[col("Min Drive Amps", "min")] != 0, np.nan)
-df3["SpreadFlag"] = (
-    (df3["SpreadRatio"] >= thr["SpreadRatio"]) &
-    (df3[col("Min Drive Amps", "min")] != 0)
-)
+
 
 # ───────────── Fault Count & Flag ─────────────
 # Choose the right raw fault-count column (daily vs weekly)
@@ -1032,7 +1061,7 @@ flag_map = {
     "Overload_Risk":      df3["Overload_Risk"],
     "High Motor Temp":    df3["HighMotorTemp"],
     "Max Vibration":      df3["HighVib"],
-    "Spread Ratio":       df3["SpreadFlag"],
+    "Amp Spread Ratio":       df3["SpreadFlag"],
     "Tubing-Casing Δ":    df3["LowDeltaFlag"],
     "Fault Count":        df3["FaultHigh"],
     "Uptime %":           df3["LowUptime"],
@@ -1094,7 +1123,7 @@ else:
 df3["TerribleScore"] = (
       weights["uptime"]       * df3["LowUptime"].astype(int)
     + weights["missing"]      * df3["MissingSensor"].astype(int)
-    + weights["spread"]       * df3["SpreadRatio"].fillna(0)
+    + weights["spread"]       * df3["ampSpreadRatio"].fillna(0)
     + weights["motortemp"]    * df3["HighMotorTemp"].astype(int)
     + weights["drawdown"]     * (drawdown < thr["SmallDrawdown"]).astype(int)
     + weights["nearunderload"]* df3["NearUnderload"].astype(int)
@@ -1138,13 +1167,13 @@ df_show["High Motor Temp"]     = df3[col("Max Motor Temp", "max")]
 df_show["High Downtime"]       = df3[col("Downtime (Hr)", "mean")]
 df_show["Max Vibration"]       = df3["Max Vibration"]
 
-# Spread ratio / Tubing-Casing Δ / NearUnderload Ratio
-df_show["Spread Ratio"]        = df3["SpreadRatio"]
+# Amp Spread Ratio / Tubing-Casing Δ / NearUnderload Ratio
+df_show["Amp Spread Ratio"]        = df3["ampSpreadRatio"]
 df_show["Tubing-Casing Δ"]     = df3[col("Avg Tubing", "mean")] - df3[col("Avg Casing", "mean")]
 df_show["NearUnderload Ratio"] = df3["NearUnderload Ratio"]
-
+df_show["Pressure Difference"] = df3["Pressure Difference"]
+df_show["Frequency Spread Ratio"]         = df3["Frequency Spread Ratio"]
 # Boolean‐derived columns replaced with numeric or checkmarks:
-df_show["NearUnderload"]       = df3["NearUnderload"].apply(lambda x: "✗" if x else "")
 df_show["Normal_vs_Overload"]  = df3["Normal_vs_Overload"].apply(lambda x: "✗" if x else "")
 df_show["MissingSensor"]       = df3["MissingSensor"].apply(lambda x: "✗" if x else "")
 
@@ -1170,16 +1199,17 @@ df_show["Link URL"] = df3["Link URL"]
 display_cols = [
     "Well Name", "Trigger","Running Days", "TerribleScore", "PoorPerformance", "SpeedUp",
     "At_Max_Capacity", "Overload_Risk",
-    "High Motor Temp", "High Downtime", "Max Vibration",
-    "Spread Ratio", "Tubing-Casing Δ","Fault Count",
+    "High Motor Temp", "High Downtime", "Max Vibration", "Pressure Difference", "Frequency Spread Ratio",
+    "Amp Spread Ratio", "Tubing-Casing Δ","Fault Count",
     "Uptime %", "NearUnderload Ratio",
-    "NearUnderload", "Normal_vs_Overload",
+    "Normal_vs_Overload",
     "MissingSensor", "Drive Type", "State Detail/Op Mode"
 ]
 # ───── Fields available for custom cards ─────
 # Only include the numeric display columns from df_show
 card_fields = df3.select_dtypes(include=[np.number]).columns.tolist()
 with st.sidebar.expander("Custom Cards", expanded=False):
+    
     custom = settings.get(current_key, {}).get("custom_cards", [])
     # List & remove
     for i, card in enumerate(custom):
@@ -1193,18 +1223,40 @@ with st.sidebar.expander("Custom Cards", expanded=False):
                 st.rerun()
     # Add new
     if len(custom) < 5:
-        with st.form("add_custom_card", clear_on_submit=True):
-            lbl   = st.text_input("Label")
-            fld   = st.selectbox("Field", card_fields, help="Type to search…")
-            op    = st.selectbox("Operator", ["<", ">", "="])
-            threshold_val  = st.number_input("Threshold", value=0.0)
-            col   = st.text_input("Color (hex)", "#336699")
-            submit = st.form_submit_button("Add card")
-            if submit and lbl:
-                new = {"label":lbl,"field":fld,"operator":op,"threshold":threshold_val,"color":col}
-                settings.setdefault(current_key,{}).setdefault("custom_cards",[]).append(new)
-                SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
-                st.rerun()
+        lbl    = st.text_input("Label")
+        st.markdown("**Condition 1**")
+        field1 = st.selectbox("Field",    card_fields, key="c1f")
+        op1     = st.selectbox("Operator", [">","<","="],    key="c1o")
+        val1    = st.number_input("Threshold", value=0.0,    key="c1v")
+
+        add2    = st.checkbox("Add second condition?",      key="add2")
+        if add2:
+            st.markdown("**Condition 2**")
+            field2 = st.selectbox("Field (2)", card_fields,  key="c2f")
+            op2     = st.selectbox("Operator (2)", [">","<","="], key="c2o")
+            val2    = st.number_input("Threshold (2)", value=0.0, key="c2v")
+            comb    = st.radio("Combine with", ["AND","OR"], index=0, key="c2c")
+        else:
+            field2 = op2 = val2 = comb = None
+
+        color  = st.text_input("Color (hex)", "#336699", key="c_color")
+        if st.button("Add card"):
+            new = {
+                "label": lbl,
+                "conditions": [
+                    {"field": field1, "op": op1, "value": val1}
+                ],
+                "combiner": comb or "AND",
+                "color": color
+            }
+            if add2:
+                new["conditions"].append(
+                    {"field": field2, "op": op2, "value": val2}
+                )
+            custom.append(new)
+            SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+            st.rerun()
+
 
 # ---------------------- JS Cell‐Style + Link‐Renderer ----------------------
 js_color = JsCode(f"""
@@ -1259,9 +1311,23 @@ function(p) {{
         return {{ 'backgroundColor': bg, 'color': cellText }};
     }}
 
-    // Spread Ratio coloring: red ≥ threshold, green otherwise
-    if (p.colDef.field === 'Spread Ratio') {{
-        var bg = ((p.value !== null) && (p.value >= {thr["SpreadRatio"]}))
+    // Amp Spread Ratio coloring: red ≥ threshold, green otherwise
+    if (p.colDef.field === 'Amp Spread Ratio') {{
+        var bg = ((p.value !== null) && (p.value >= {thr["ampSpreadRatio"]}))
+            ? (isDark ? darkRed : lightRed)
+            : (isDark ? darkGreen : lightGreen);
+        return {{ 'backgroundColor': bg, 'color': cellText }};
+    }}
+    if (p.colDef.field === 'Pressure Difference') {{
+        var bg = (p.value <= {thr["PressureDiff"]})
+            ? (isDark ? darkRed : lightRed)
+            : (isDark ? darkGreen : lightGreen);
+        return {{ 'backgroundColor': bg, 'color': cellText }};
+    }}
+
+    // Frequency Spread Ratio coloring: red ≥ threshold, green otherwise
+    if (p.colDef.field === 'Frequency Spread Ratio') {{
+        var bg = (p.value >= {thr["FreqSpread"]})
             ? (isDark ? darkRed : lightRed)
             : (isDark ? darkGreen : lightGreen);
         return {{ 'backgroundColor': bg, 'color': cellText }};
@@ -1416,7 +1482,7 @@ gb.configure_column(
         "TerribleScore = "
         "(LowUptime × uptime weight) + "
         "(MissingSensor × missing weight) + "
-        "(SpreadRatio × spread weight) + "
+        "(ampSpreadRatio × spread weight) + "
         "(HighMotorTemp × motortemp weight) + "
         "((Max Intake – Min Intake) < SmallDrawdown threshold × drawdown weight) + "
         "(NearUnderload × nearunderload weight) + "
@@ -1555,15 +1621,16 @@ gb.configure_column(
     )
 )
 gb.configure_column(
-    "Spread Ratio",
+    "Amp Spread Ratio",
     type=["numericColumn"],
     valueFormatter="x.toFixed(2)",
     headerTooltip=(
-        "SpreadRatio = (Max Drive Amps − Min Drive Amps) ÷ (Avg Drive Amps).\n"
+        "ampSpreadRatio = (Max Drive Amps − Min Drive Amps) ÷ (Avg Drive Amps).\n"
         "If Min Drive Amps = 0 → displayed as N/A.\n"
-        "Cell is red if ≥ Spread ratio threshold, green otherwise."
+        "Cell is red if ≥ Amp Spread Ratio threshold, green otherwise."
     )
 )
+
 gb.configure_column(
     "Tubing-Casing Δ",
     type=["numericColumn"],
@@ -1571,6 +1638,25 @@ gb.configure_column(
     headerTooltip=(
         "Tubing-Casing Δ = Avg Tubing Pressure − Avg Casing Pressure.\n"
         "Cell is red if ≤ Low Tub-Casing Δ threshold, green otherwise."
+    )
+)
+gb.configure_column(
+    "Pressure Difference",
+    type=["numericColumn"],
+    valueFormatter="x == null ? '' : x.toFixed(1)",
+    headerTooltip=(
+        "Pressure Difference = Avg Disch Pressure − Avg Intake Pressure."
+        "Cell is red if ≤ Pressure Difference threshold, green otherwise."
+    )
+)
+# ---------- NEW: Frequency Spread Ratio --------------------------------
+gb.configure_column(
+    "Frequency Spread Ratio",
+    type=["numericColumn"],
+    valueFormatter="x == null ? '' : x.toFixed(2)",
+    headerTooltip=(
+        "Frequency Spread Ratio = (Max − Min) ÷ Avg Drive Frequency (unitless).\n"
+        "Cell is red if ≥ Frequency Spread Ratio threshold, green otherwise."
     )
 )
 gb.configure_column(
@@ -1834,26 +1920,29 @@ if page == "Customers":
     # ───── Render custom cards ─────
     custom = settings.get(current_key, {}).get("custom_cards", [])
     if custom:
-        # use the same 7-col layout you used for your summary row:
-        cols_custom = st.columns([2] + [1]*6)
-        for j, card in enumerate(custom):
-            # j==0 → use the first "small" column at index 1,
-            # j==1 → index 2, etc.  (up to 6 cards)
-            if j >= 5:
-                break
+        # up to 5 cards in the same layout
+        cols_custom = st.columns([2] + [1] * min(len(custom), 5))
+        for idx, card in enumerate(custom[:5]):
+            with cols_custom[idx + 2]:
+                # build & combine each condition
+                mask = None
+                for cond in card["conditions"]:
+                    f, o, v = cond["field"], cond["op"], cond["value"]
+                    if   o == ">": m = df3[f] >  v
+                    elif o == "<": m = df3[f] <  v
+                    else:           m = df3[f] == v
 
-            with cols_custom[j+2]:
-                field = card["field"]
-                thr   = card["threshold"]
-                if   card["operator"] == ">":
-                    mask = df3[field] > thr
-                elif card["operator"] == "<":
-                    mask = df3[field] < thr
-                else:
-                    mask = df3[field] == thr
+                    if mask is None:
+                        mask = m
+                    else:
+                        if card.get("combiner","AND") == "AND":
+                            mask = mask & m
+                        else:
+                            mask = mask | m
+
                 count = int(mask.sum())
-                bg = card["color"] + "33"
-                txt = card["color"]
+                bg    = card["color"] + "33"
+                txt   = card["color"]
                 st.markdown(f"""
                     <div style="
                         background-color:{bg};
@@ -1863,16 +1952,16 @@ if page == "Customers":
                         text-align:center;
                         box-shadow:0 2px 4px rgba(0,0,0,0.15);
                     ">
-                    <div style="font-size:14px;font-weight:600;">
+                      <div style="font-size:14px;font-weight:600;">
                         {card['label']}
-                    </div>
-                    <div style="font-size:24px;font-weight:bold;">
+                      </div>
+                      <div style="font-size:24px;font-weight:bold;">
                         {count}
-                    </div>
+                      </div>
                     </div>
                 """, unsafe_allow_html=True)
-    st.markdown("---")
 
+    st.markdown("---")
     # ───────────── Per‐Customer Row Cards ─────────────
     for i, row in cust_metrics.iterrows():
         cust_name = row["Customer"]
@@ -2174,28 +2263,33 @@ if page == "Dashboard":
             """,
             unsafe_allow_html=True,
         )
+
     # ───── Render custom cards ─────
     custom = settings.get(current_key, {}).get("custom_cards", [])
     if custom:
-        # limit to at most 5 cards and place them in their own row beneath the static cards
-        num_cards = min(len(custom), 5)
-        # first column (width=4) is blank (to align under "Poor Performance"), then one column per custom card
+        # up to 5 cards, blank spacer to align under “Poor Performance”
+        num_cards   = min(len(custom), 5)
         cols_custom = st.columns([4] + [1] * num_cards)
-        for j, card in enumerate(custom[:num_cards]):
-            # j=0 → cols_custom[1], j=1 → cols_custom[2], etc.
-            with cols_custom[j + 1]:
-                field = card["field"]
-                thr   = card["threshold"]
-                # build the mask based on the operator
-                if card["operator"] == ">":
-                    mask = df3[field] > thr
-                elif card["operator"] == "<":
-                    mask = df3[field] < thr
-                else:
-                    mask = df3[field] == thr
-                count = int(mask.sum())
-                bg = card["color"] + "33"
-                txt = card["color"]
+
+        for idx, card in enumerate(custom[:num_cards]):
+            # make sure we have a list of conditions
+            if "conditions" not in card:
+                continue  # skip any malformed entries
+            with cols_custom[idx + 1]:
+                mask = None
+                for cond in card["conditions"]:
+                    f, o, v = cond["field"], cond["op"], cond["value"]
+                    if   o == ">": m = df3[f] >  v
+                    elif o == "<": m = df3[f] <  v
+                    else         : m = df3[f] == v
+
+                    mask = m if mask is None else (
+                        (mask & m) if card.get("combiner","AND")=="AND" else (mask | m)
+                    )
+
+                count = int(mask.sum()) if mask is not None else 0
+                bg, txt = card["color"] + "33", card["color"]
+
                 st.markdown(f"""
                     <div style="
                         background-color:{bg};
@@ -2205,17 +2299,18 @@ if page == "Dashboard":
                         text-align:center;
                         box-shadow:0 2px 4px rgba(0,0,0,0.15);
                     ">
-                    <div style="font-size:14px; font-weight:600;">
+                    <div style="font-size:14px;font-weight:600;">
                         {card['label']}
                     </div>
-                    <div style="font-size:24px; font-weight:bold;">
+                    <div style="font-size:24px;font-weight:bold;">
                         {count}
                     </div>
                     </div>
                 """, unsafe_allow_html=True)
 
-    # 3) Below the card row, show the filter & AG-Grid as before:
-    st.markdown("")  # optional spacer
+    st.markdown("---")
+
+
     flag = st.selectbox(
         "Filter wells by flag",
         [
@@ -2224,7 +2319,7 @@ if page == "Dashboard":
             "Normal_vs_Overload",
             "HighVib",
             "LowUptime",
-            "Spread Ratio",
+            "Amp Spread Ratio",
             "PoorPerformance"
         ]
     )
