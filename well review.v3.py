@@ -2315,29 +2315,45 @@ if page == "Dashboard":
     )
     
     df_live = pd.DataFrame(grid_response["data"])[display_cols]
+   # ─── PDF download of the live AG-Grid via wkhtmltopdf ───────────────────
+   # Dependencies:
+   #   pip install pdfkit
+   #   sudo apt-get install -y wkhtmltopdf
+   import pdfkit, json
 
-    # CSV download of exactly what's on-screen
-    csv_bytes = df_live.to_csv(index=False).encode("utf-8")
-    # — PDF download button (replaces CSV) —
-    # Dependencies:
-    #   pip install pdfkit
-    #   sudo apt-get install -y wkhtmltopdf
-    import pdfkit
+   # Serialize your existing grid options & the current row data
+   grid_json = json.dumps(grid_opts)
+   row_json  = json.dumps(df_live.to_dict(orient="records"))
 
-    # Render the DataFrame as HTML, then convert to PDF in memory
-    html = df_live.to_html(index=False)
-    pdf_bytes = pdfkit.from_string(
-        html,
-        False,
-        options={'enable-local-file-access': ''}
-    )
-    st.download_button(
-        label="📥 Download current table as PDF",
-        data=pdf_bytes,
-        file_name=f"well_report_{today}.pdf",
-        mime="application/pdf",
-    )
+   # Build a minimal HTML page (with AG-Grid CSS/JS from CDN)
+   html = f"""
+   <!DOCTYPE html>
+   <html>
+   <head>
+     <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/dist/styles/ag-grid.css">
+     <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/dist/styles/ag-theme-alpine.css">
+     <style>html, body, #myGrid {{height:100%;margin:0;padding:0;}}</style>
+   </head>
+   <body>
+     <div id="myGrid" class="{'ag-theme-alpine-dark' if night_mode else 'ag-theme-alpine'}"></div>
+     <script src="https://unpkg.com/ag-grid-community/dist/ag-grid-community.min.noStyle.js"></script>
+     <script>
+       var gridOptions = {grid_json};
+       gridOptions.rowData = {row_json};
+       new agGrid.Grid(document.getElementById('myGrid'), gridOptions);
+     </script>
+   </body>
+   </html>
+   """
 
+   # Convert that HTML → PDF in memory
+   pdf_bytes = pdfkit.from_string(html, False, options={'enable-local-file-access': ''})
+   st.download_button(
+       label="📥 Download current table as PDF",
+       data=pdf_bytes,
+       file_name=f"well_report_{today}.pdf",
+       mime="application/pdf",
+   )
     # Excel download of the same
     from io import BytesIO
     buf = BytesIO()
