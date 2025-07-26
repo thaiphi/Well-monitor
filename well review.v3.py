@@ -2058,6 +2058,12 @@ if page == "Customers":
         
 
     st.stop()
+    # ───────────── Export enriched CSV ─────────────
+    if st.button("Refresh & Save Enriched CSV"):
+        outfile = pathlib.Path(f"{today}_well_report_enriched.csv")
+        df_show.to_csv(outfile, index=False)
+        st.success(f"Enriched CSV saved to **{outfile.resolve()}**")
+
 
 # ───────────── DASHBOARD (per-customer) ─────────────
 if page == "Dashboard":
@@ -2310,19 +2316,8 @@ if page == "Dashboard":
 
     st.markdown("---")
 
-
-    flag = st.selectbox(
-        "Filter wells by flag",
-        [
-            "All",
-            "MissingSensor",
-            "Normal_vs_Overload",
-            "HighVib",
-            "LowUptime",
-            "Amp Spread Ratio",
-            "PoorPerformance"
-        ]
-    )
+    options = ["All"] + list(flag_map.keys())
+    flag    = st.selectbox("Filter wells by flag", options)
     view = df_show if flag == "All" else df_show[df3[flag]]
     view = view.sort_values("TerribleScore", ascending=False)
 
