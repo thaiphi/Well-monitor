@@ -22,6 +22,7 @@ from io import BytesIO
 import json
 import urllib.parse
 import requests
+import pdfkit, json
 SETTINGS_FILE = pathlib.Path("customer_settings.json")
 # ─── PLACEHOLDER: put your real n8n webhook URL here ───────────────
 N8N_WEBHOOK_URL = "https://<YOUR-N8N-HOST>/webhook"
@@ -2319,7 +2320,7 @@ if page == "Dashboard":
    # Dependencies:
    #   pip install pdfkit
    #   sudo apt-get install -y wkhtmltopdf
-   import pdfkit, json
+
 
    # Serialize your existing grid options & the current row data
    grid_json = json.dumps(grid_opts)
