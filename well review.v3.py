@@ -2058,12 +2058,14 @@ if page == "Customers":
         
 
     st.stop()
-    # ───────────── Export enriched CSV ─────────────
-    if st.button("Refresh & Save Enriched CSV"):
-        outfile = pathlib.Path(f"{today}_well_report_enriched.csv")
-        df_show.to_csv(outfile, index=False)
-        st.success(f"Enriched CSV saved to **{outfile.resolve()}**")
-
+    # ───────────── Download enriched CSV ─────────────
+    csv_bytes = df_show.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Enriched CSV",
+        data=csv_bytes,
+        file_name=f"{today}_well_report_enriched.csv",
+        mime="text/csv",
+    )
 
 # ───────────── DASHBOARD (per-customer) ─────────────
 if page == "Dashboard":
@@ -2343,12 +2345,14 @@ else:
         )
     else:
         st.dataframe(df3, height=700)
-
-# ───────────── Export enriched CSV ─────────────
-if st.button("Refresh & Save Enriched CSV"):
-    outfile = pathlib.Path(f"{today}_well_report_enriched.csv")
-    df_show.to_csv(outfile, index=False)
-    st.success(f"Enriched CSV saved to **{outfile.resolve()}**")
+# ───────────── Download enriched CSV ─────────────
+csv_bytes = df_show.to_csv(index=False).encode('utf-8')
+st.download_button(
+    label="Download Enriched CSV",
+    data=csv_bytes,
+    file_name=f"{today}_well_report_enriched.csv",
+    mime="text/csv",
+)
 
 
 # ─── If we have an n8n response, show it here ───────────────────────
