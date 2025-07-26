@@ -2371,8 +2371,13 @@ if page == "Dashboard":
 
 else:
     # ─────────── “Raw Data” tab (unchanged) ───────────
-
-  
+    if night_mode:
+        st.dataframe(
+            df3.style.set_properties(
+                **{"background-color": "#2d2d2d", "color": "#e0e0e0", "border-color": "#555"}
+            ),
+            height=700,
+        )
     else:
         st.dataframe(df3, height=700)
 
