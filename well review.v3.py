@@ -2332,8 +2332,6 @@ if page == "Dashboard":
         fit_columns_on_grid_load=False,
         theme=grid_theme,
     )
-        # ← INSERT DOWNLOAD BUTTONS HERE ↓
-
     # CSV download
     csv_bytes = view.to_csv(index=False).encode("utf-8")
     st.download_button(
@@ -2343,14 +2341,12 @@ if page == "Dashboard":
         mime="text/csv",
     )
 
-    # (optionally) Excel download
+    # Excel download
     from io import BytesIO
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         view.to_excel(writer, index=False, sheet_name="Wells")
-        writer.save()
-        buf.seek(0)
-
+    buf.seek(0)
     st.download_button(
         label="📥 Download current table as Excel",
         data=buf,
