@@ -2332,6 +2332,31 @@ if page == "Dashboard":
         fit_columns_on_grid_load=False,
         theme=grid_theme,
     )
+        # ← INSERT DOWNLOAD BUTTONS HERE ↓
+
+    # CSV download
+    csv_bytes = view.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Download current table as CSV",
+        data=csv_bytes,
+        file_name=f"well_report_{today}.csv",
+        mime="text/csv",
+    )
+
+    # (optionally) Excel download
+    from io import BytesIO
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        view.to_excel(writer, index=False, sheet_name="Wells")
+        writer.save()
+        buf.seek(0)
+
+    st.download_button(
+        label="📥 Download current table as Excel",
+        data=buf,
+        file_name=f"well_report_{today}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 else:
     # ─────────── “Raw Data” tab (unchanged) ───────────
