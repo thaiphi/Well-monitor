@@ -2318,11 +2318,24 @@ if page == "Dashboard":
 
     # CSV download of exactly what's on-screen
     csv_bytes = df_live.to_csv(index=False).encode("utf-8")
+    # — PDF download button (replaces CSV) —
+    # Dependencies:
+    #   pip install pdfkit
+    #   sudo apt-get install -y wkhtmltopdf
+    import pdfkit
+
+    # Render the DataFrame as HTML, then convert to PDF in memory
+    html = df_live.to_html(index=False)
+    pdf_bytes = pdfkit.from_string(
+        html,
+        False,
+        options={'enable-local-file-access': ''}
+    )
     st.download_button(
-        label="📥 Download current table as CSV",
-        data=csv_bytes,
-        file_name=f"well_report_{today}.csv",
-        mime="text/csv",
+        label="📥 Download current table as PDF",
+        data=pdf_bytes,
+        file_name=f"well_report_{today}.pdf",
+        mime="application/pdf",
     )
 
     # Excel download of the same
