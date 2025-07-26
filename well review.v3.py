@@ -2058,14 +2058,6 @@ if page == "Customers":
         
 
     st.stop()
-    # ───────────── Download enriched CSV ─────────────
-    csv_bytes = df_show.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Download Enriched CSV",
-        data=csv_bytes,
-        file_name=f"{today}_well_report_enriched.csv",
-        mime="text/csv",
-    )
 
 # ───────────── DASHBOARD (per-customer) ─────────────
 if page == "Dashboard":
@@ -2324,16 +2316,22 @@ if page == "Dashboard":
     view = view.sort_values("TerribleScore", ascending=False)
 
     grid_theme = "ag-theme-alpine-dark" if night_mode else "ag-theme-alpine"
-    AgGrid(
+        from st_aggrid import GridUpdateMode, DataReturnMode
+
+    grid_response = AgGrid(
         view,
         gridOptions=grid_opts,
         allow_unsafe_jscode=True,
+        theme=grid_theme,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
         use_container_width=True,
         fit_columns_on_grid_load=False,
-        theme=grid_theme,
     )
-    # CSV download
-    csv_bytes = view.to_csv(index=False).encode("utf-8")
+    df_live = pd.DataFrame(grid_response["data"])
+
+    # CSV download of exactly what's on-screen
+    csv_bytes = df_live.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="📥 Download current table as CSV",
         data=csv_bytes,
@@ -2341,11 +2339,11 @@ if page == "Dashboard":
         mime="text/csv",
     )
 
-    # Excel download
+    # Excel download of the same
     from io import BytesIO
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
-        view.to_excel(writer, index=False, sheet_name="Wells")
+        df_live.to_excel(writer, index=False, sheet_name="Wells")
     buf.seek(0)
     st.download_button(
         label="📥 Download current table as Excel",
@@ -2353,6 +2351,7 @@ if page == "Dashboard":
         file_name=f"well_report_{today}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 
 else:
     # ─────────── “Raw Data” tab (unchanged) ───────────
@@ -2366,14 +2365,6 @@ else:
         )
     else:
         st.dataframe(df3, height=700)
-# ───────────── Download enriched CSV ─────────────
-csv_bytes = df_show.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="Download Enriched CSV",
-    data=csv_bytes,
-    file_name=f"{today}_well_report_enriched.csv",
-    mime="text/csv",
-)
 
 
 # ─── If we have an n8n response, show it here ───────────────────────
