@@ -1668,14 +1668,7 @@ gb.configure_column(
         "Cell is red if < Near-underload lower bound, green otherwise."
     )
 )
-gb.configure_column(
-    "NearUnderload",
-    type=["textColumn"],
-    headerTooltip=(
-        "True if (Avg Drive Amps ÷ Motor Underload) < Near-underload threshold.\n"
-        "Displays a red “✗” if True, blank if False."
-    )
-)
+
 gb.configure_column(
     "Normal_vs_Overload",
     type=["textColumn"],
@@ -1701,15 +1694,7 @@ gb.configure_column(
         "Cell is red if ≥ High fault count threshold, green otherwise."
     )
 )
-gb.configure_column(
-    "HighVib",
-    type=["numericColumn"],
-    valueFormatter="x.toFixed(2)",
-    headerTooltip=(
-        "HighVib = Max Vibration (max of Avg Vib X, Avg Vib Y).\n"
-        "Cell is red if ≥ High vibration threshold, green otherwise."
-    )
-)
+
 gb.configure_column(
     "Uptime %",
     type=["numericColumn"],
