@@ -2316,7 +2316,7 @@ if page == "Dashboard":
     view = view.sort_values("TerribleScore", ascending=False)
 
     grid_theme = "ag-theme-alpine-dark" if night_mode else "ag-theme-alpine"
-        from st_aggrid import GridUpdateMode, DataReturnMode
+    from st_aggrid import GridUpdateMode, DataReturnMode
 
     grid_response = AgGrid(
         view,
