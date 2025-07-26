@@ -2328,7 +2328,8 @@ if page == "Dashboard":
         use_container_width=True,
         fit_columns_on_grid_load=False,
     )
-    df_live = pd.DataFrame(grid_response["data"])
+    
+    df_live = pd.DataFrame(grid_response["data"])[display_cols]
 
     # CSV download of exactly what's on-screen
     csv_bytes = df_live.to_csv(index=False).encode("utf-8")
