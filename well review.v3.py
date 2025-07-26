@@ -2315,7 +2315,7 @@ if page == "Dashboard":
     )
     
     df_live = pd.DataFrame(grid_response["data"])[display_cols]
-   # ─── PDF download of the live AG-Grid via wkhtmltopdf ───────────────────
+       # ─── PDF download of the live AG-Grid via wkhtmltopdf ───────────────────
    # Dependencies:
    #   pip install pdfkit
    #   sudo apt-get install -y wkhtmltopdf
