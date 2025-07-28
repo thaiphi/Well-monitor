@@ -222,7 +222,7 @@ def read_registers(reg_dict, client):
     """Read a dict of registers from Modbus client."""
     vals = {}
     for name, (addr, count) in reg_dict.items():
-        resp = client.read_holding_registers(addr, count=count, slave=1)
+        resp = client.read_holding_registers(addr, count=count, device_id=1)
         if not resp.isError():
             if count == 2:
                 low, high = resp.registers
